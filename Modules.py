@@ -4,14 +4,31 @@ import Checking
 from Checking import *
 
 
-def write_1d_list_to_csv(input_list, csv_filename):
-    with open(csv_filename, 'w', newline='') as csvfile:
-        csv_writer = writer(csvfile)
-        csv_writer.writerow([])
+def s_B(n):
+    a = [11, 11, 10, 10, 11, 11, 12, 11]
+    return a[n - 3]
+def p_B(n):
+    a = [3, 2, 1, 3, 3, 4, 3, 3]
+    return a[n - 3]
+
+def write_1d_list_to_csv(input_list,firstRow, csv_filename):
+    import csv
+    with open(csv_filename, 'w',newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow(firstRow)
         for k in range(len(input_list)):
             csv_writer.writerow(input_list[k])
 
     print(f'CSV file "{csv_filename}" has been created in the Downloads folder.')
+def transpose(list):
+    'Takes 2-D list and returns the list transposed'
+    list1 = list.copy()
+    formatted = []
+    for k in range(len(list1[0])):
+        formatted.append([])
+        for i in list1:
+            formatted[k].append(i[k])
+    return formatted
 
 def createDeck(): #Creates the deck.
     deck = []
@@ -39,7 +56,7 @@ def countPoints(hand):
     for i in runs:
         if i[2] == 0:
             hand1 = [x for x in hand1 if not ((x[1] >= runs[i][0] and x[1] <= runs[i][1]) and (x[0]==runs[i][3]))]
-    #print("hand with (supposedly removed) tuples:",hand1)
+    # print("hand with (supposedly removed) tuples:",hand1)
 
     #print("new hand:",hand1)
     if not (hand1 == hand1_original):
@@ -78,7 +95,7 @@ def countPoints(hand):
 
     #Orders possibleMoves so that better moves are ahead.
     possibleMoves.sort(key=lambda x: x[2],reverse=True)
-    #print("Possible moves (before any processing):",possibleMoves)
+    # print("Possible moves (before any processing):",possibleMoves)
 
     toDelete = []
     repeats = False
@@ -86,7 +103,7 @@ def countPoints(hand):
     #Allocates jokers, while there are them.
     for move in possibleMoves:
         if isinstance(move[1],int) and (j >= (3-move[1])):
-            #print("registered triple")
+            # print("registered triple")
             j -= (3-move[1])
 
             #Removes cards from the hand
@@ -96,17 +113,51 @@ def countPoints(hand):
         elif isinstance(move[1],list) and (j>=move[3]):
             toDelete = []
             j -= move[3]
-            #print("Used joker on ",move,"with remaining jokers ",j)
-
-            hand1 = [card for card in hand1 if (not(card[1] in move[1]) and (card[0] == move[0]))]
-
-    #print("points before adding:",points)
+            # print("Used joker on ",move,"with remaining jokers ",j)
+            hand1 = [card for card in hand1 if not ((card[1] in move[1]) and (card[0] == move[0]))]
+    #
+    # print('Hand with cards removed:',hand1)
+    # print("points before adding:",points)
     #Add up remaining number of points
     for i in range(0, len(hand1)):
         points += hand1[i][1]
         #print("added",hand1[i][1],"to point total")
-    #print("points: ",points)
+    # print("points: ",points)
     return points
+
+def oneTurn(player, breakpointSets, breakpointPoints,rounds,deck):
+    global discard
+    # print(player,"'s turn. Starting hand:",player.hand,"with points",player.points,"and sets",Checking.checkTuples(player.hand)+Checking.checkRuns(player.hand))
+    # print("In the discard:",discard)
+    dChoice = player.evalDiscardSmart(discard, breakpointSets, breakpointPoints)
+    # print("Taking discard?",dChoice)
+    if dChoice == True:
+        player.hand.append(discard)
+    else:
+        b = random.randrange(0, len(deck) - 1)
+        player.hand.append(deck[b])
+        del deck[b]
+    discard = player.discard_card()
+    player.hand.remove(discard)
+    player.points = countPoints(player.hand)
+    player.pointHistory.append(player.points)
+    if player.points == 0:
+        player.out = True
+        player.turnsToGoOut = rounds
+    # print(player, "'s end of turn. Hand:", player.hand, "with points", player.points, "and sets", Checking.checkTuples(player.hand) + Checking.checkRuns(player.hand))
+
+def initialize_deck():
+    deck = createDeck()
+    b = random.randrange(0, len(deck) - 1)
+    global discard
+    discard = deck[b]
+    # print("In the discard:",discard)
+    del deck[b]
+    # Adds jokers. We treat kings as jokers (i.e. not adding kings separately) since functionally, it does not (really) matter which card is wild.
+    for i in range(0, 14):
+        deck.append([0, "j"])
+
+    return (deck,discard)
 
 class Player:
     def __init__(self, name):
@@ -117,7 +168,6 @@ class Player:
         self.points = 1000
         self.pointHistory = []
         self.out = False
-        self.turnsToGoOut = 1000
 
     def receive_hand(self, size, deck): #For recieving a hand. Selects random element from the deck, adds it to the hand, and removes it from the deck
         for i in range(0,size):
@@ -141,15 +191,15 @@ class Player:
         runsB = Checking.checkRuns(handWithDiscard)
         #If the discarded card means fewer points, period (i.e. fits into or creates set). Includes wilds (so we don't need to worry about those)
         if countPoints(self.hand) >= countPoints(handWithDiscard):
-            #print("Can add to sets")
+            # print("Can add to sets")
             return True
         #Or if it creates runs/tuples, and doesn't pose too big a risk to take
         elif (len(tuplesA) < len(tuplesB)) or (len(runsA) < len(runsB)):
             if faceUpCard[1] >= breakpointRuns:
-                #print("Can create set potential, but too expensive")
+                # print("Can create set potential, but too expensive")
                 return False
             elif faceUpCard[1] < breakpointRuns:
-                #print("Can create set potential")
+                # print("Can create set potential")
                 self.createSets = True
                 return True
         else:
@@ -158,7 +208,7 @@ class Player:
                 if self.hand[i][1] == "j":
                     pass
                 elif self.hand[i][1] >= breakpointPoints + faceUpCard[1]:
-                    #print("Can lead to lower points")
+                    # print("Can lead to lower points")
                     return True
         return False
 
